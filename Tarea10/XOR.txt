@@ -1,0 +1,67 @@
+// (Las mismas funciones de activación, inicialización, propagación y actualización que en el programa OR)
+
+// Datos de entrenamiento para la función XOR
+X = [0 0; 0 1; 1 0; 1 1]';  // Entradas
+Y = [0 1 1 0];               // Salidas esperadas para XOR
+
+// Hiperparámetros (aumentamos neuronas ocultas para XOR)
+input_size = 2;    // Número de entradas
+hidden_size = 4;   // Más neuronas para aprender XOR
+output_size = 1;   // Neuronas en capa de salida
+learning_rate = 0.1;
+epochs = 10000;    // Más épocas para aprendizaje complejo
+
+// Inicialización de parámetros
+[W1, b1, W2, b2] = initialize_parameters(input_size, hidden_size, output_size);
+
+// Entrenamiento
+for i = 1:epochs
+    [Z1, A1, Z2, A2] = forward_propagation(X, W1, b1, W2, b2);
+    [dW1, db1, dW2, db2] = backward_propagation(X, Y, Z1, A1, Z2, A2, W2);
+    [W1, b1, W2, b2] = update_parameters(W1, b1, W2, b2, dW1, db1, dW2, db2, learning_rate);
+    
+    // Mostrar progreso cada 1000 épocas
+    if modulo(i, 1000) == 0
+        current_loss = mean(abs(A2 - Y));
+        mprintf("Época %d, Error: %f\n", i, current_loss);
+    end
+end
+
+// Prueba
+[~, ~, Z2, ~] = forward_propagation(X, W1, b1, W2, b2);
+predictions = round(Z2);  // Redondeo para obtener 0 o 1
+
+// Mostrar resultados
+disp("Resultados para compuerta XOR:");
+disp("Entrada1 Entrada2 Salida Esperada Salida Red");
+disp([X(1,:)', X(2,:)', Y', predictions']);
+
+// Función para visualizar la solución
+function visualize_xor_solution(W1, b1, W2, b2)
+    // Crear una malla de puntos para visualizar la función aprendida
+    x1 = linspace(-0.5, 1.5, 50);
+    x2 = linspace(-0.5, 1.5, 50);
+    [X1, X2] = meshgrid(x1, x2);
+    Z = zeros(size(X1));
+    
+    for i = 1:size(X1, 1)
+        for j = 1:size(X1, 2)
+            input = [X1(i,j); X2(i,j)];
+            [~, ~, output, ~] = forward_propagation(input, W1, b1, W2, b2);
+            Z(i,j) = output;
+        end
+    end
+    
+    // Graficar
+    scf();
+    contourf(x1, x2, Z, [0.25 0.5 0.75], "jet");
+    colorbar();
+    // Puntos de entrenamiento
+    plot(0, 0, 'ko'); plot(0, 1, 'wx'); plot(1, 0, 'wx'); plot(1, 1, 'ko');
+    xtitle("Función aprendida para XOR");
+    xlabel("Entrada 1");
+    ylabel("Entrada 2");
+endfunction
+
+// Visualizar la solución
+visualize_xor_solution(W1, b1, W2, b2);
