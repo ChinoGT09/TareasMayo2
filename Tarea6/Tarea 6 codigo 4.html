@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <style>
+        body{
+            display: block;
+            font-family: Arial, sans-serif;
+        }
+        #div_imagen{
+            display:inline-block;
+            border:1px solid grey;
+        }
+        #div_imagen>mi_imagen{
+            display:block;
+        }
+        #titulo{
+            border:1px solid grey;
+            padding: 2px;
+            background-color: #f0f0f0;
+        }
+        #mi_grafica{
+            float:left;
+            padding-right: 5px;
+        }
+        #mi_div{
+            float:left;  
+            border:1px solid grey;
+            padding: 10px;
+            margin-left: 10px;
+            background-color: #f9f9f9;
+        }
+        #canvas{
+            border:1px solid grey; 
+            float:left; 
+            margin: 10px;
+            background: #ffffff;
+        }
+        input{
+            display: block; 
+            margin: 5px 0;
+        }
+        td{
+            text-align: right;
+        }
+        td.verde{
+            color: green;
+        }
+        td.azul{
+            color: blue;
+        }
+        .boton{
+            text-decoration: none;
+            padding: 8px 12px;
+            font-weight: 600;
+            font-size: 14px;
+            color: #ffffff;
+            background-color: #1883ba;
+            border-radius: 4px;
+            border: 1px solid #0016b0;
+            cursor: pointer;
+            margin: 5px 0;
+        }
+        .boton:hover {
+            background-color: #156b9b;
+        }
+        #customers {
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        #customers td, #customers th {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        #customers tr:nth-child(even){background-color: #f2f2f2;}
+
+        #customers tr:hover {background-color: #ddd;}
+
+        #customers th {
+            padding-top: 12px;
+            padding-bottom: 12px;
+            text-align: left;
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        #resultados {
+            clear: both;
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+        }
+        
+        .error-graph {
+            margin-top: 20px;
+            width: 100%;
+            height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div id="principal">
+        <div id="div_trabajo">
+            <p id="titulo">Para agregar puntos (x,y, clase), indique la clase (0/1) y haga clic en el área gráfica, repita hasta completar su conjunto de puntos.
+            </p>
+            <div id="mi_grafica">
+                <canvas id="canvas" width="600" height="600"></canvas>
+            </div>
+            <div id="mi_div">
+                <label>Coordenadas del punto:</label>
+                <input type='number' id='x' placeholder='x (-50 a 50)' step="0.1"><br>
+                <input type='number' id='y' placeholder='y (-50 a 50)' step="0.1"><br>
+                <label>Clase:</label>
+                <input type='number' id='clase' placeholder='clase (0 o 1)' min="0" max="1" value="1"><br>
+                
+                <input type="button" id="btn_agregar" class="boton" value="Agregar punto manualmente">
+                <input type="button" id="btn_entrenar" class="boton" value="Entrenar perceptrón">
+                <input type="button" id="btn_limpiar" class="boton" value="Limpiar todo">
+                
+                <div style="overflow:auto; height:200px; margin-top:10px;">
+                    <table id="customers">
+                        <caption>Puntos agregados</caption>
+                        <thead>
+                            <tr>
+                                <th>X</th><th>Y</th><th>Clase</th>
+                            </tr>
+                        </thead>
+                        <tbody id="datos_tabla">   
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="pesos_info" style="margin-top:10px;">
+                    <h3>Pesos del perceptrón:</h3>
+                    <p id="pesos_text">No entrenado</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="resultados">
+            <h2>Resultados del entrenamiento</h2>
+            <div id="errores_container">
+                <canvas id="error_graph" class="error-graph"></canvas>
+            </div>
+            <div id="predicciones">
+                <h3>Probar predicción:</h3>
+                <input type='number' id='test_x' placeholder='x' step="0.1">
+                <input type='number' id='test_y' placeholder='y' step="0.1">
+                <input type="button" id="btn_predecir" class="boton" value="Predecir clase">
+                <p id="prediccion_result">Ingrese valores y haga clic en Predecir</p>
+            </div>
+        </div>
+    </div>
+</body>
+<script>
+    // Configuración del área gráfica
+    let area_grafica = {
+        "alto_canvas": 0,
+        "ancho_canvas": 0,
+        "alto_grafica": 0,
+        "ancho_grafica": 0,
+        "minx": -50,
+        "maxx": 50,
+        "miny": -50,
+        "maxy": 50,
+        "padding": 5
+    };
+    
+    // Puntos a graficar
+    let puntos = [];
+    let perceptron = null;
+    let erroresEntrenamiento = [];
+    
+    // Elementos del DOM
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const errorCtx = document.getElementById("error_graph").getContext("2d");
+    
+    // Clase Perceptrón
+    class Perceptron {
+        constructor(numEntradas, tasaAprendizaje = 0.1, epocas = 100) {
+            this.pesos = new Array(numEntradas + 1).fill(0).map(() => Math.random() * 2 - 1); // +1 para el bias
+            this.tasaAprendizaje = tasaAprendizaje;
+            this.epocas = epocas;
+            this.errores = [];
+        }
+        
+        funcionActivacion(x) {
+            return x >= 0 ? 1 : 0;
+        }
+        
+        predecir(entradas) {
+            let suma = this.pesos[0]; // Bias
+            for (let i = 0; i < entradas.length; i++) {
+                suma += entradas[i] * this.pesos[i + 1];
+            }
+            return this.funcionActivacion(suma);
+        }
+        
+        entrenar(X, y) {
+            this.errores = [];
+            for (let epoca = 0; epoca < this.epocas; epoca++) {
+                let errorEpoca = 0;
+                for (let i = 0; i < X.length; i++) {
+                    const prediccion = this.predecir(X[i]);
+                    const error = y[i] - prediccion;
+                    
+                    // Actualizar pesos
+                    this.pesos[0] += this.tasaAprendizaje * error; // Bias
+                    for (let j = 0; j < X[i].length; j++) {
+                        this.pesos[j + 1] += this.tasaAprendizaje * error * X[i][j];
+                    }
+                    
+                    errorEpoca += Math.abs(error);
+                }
+                this.errores.push(errorEpoca);
+                if (errorEpoca === 0) break; // Convergencia
+            }
+            return this.errores;
+        }
+    }
+    
+    // Función para convertir coordenadas del canvas a coordenadas lógicas
+    function canvasToLogical(x, y) {
+        const logicalX = area_grafica.minx + (x / canvas.width) * (area_grafica.maxx - area_grafica.minx);
+        const logicalY = area_grafica.maxy - (y / canvas.height) * (area_grafica.maxy - area_grafica.miny);
+        return { x: logicalX, y: logicalY };
+    }
+    
+    // Función para convertir coordenadas lógicas a coordenadas del canvas
+    function logicalToCanvas(x, y) {
+        const canvasX = ((x - area_grafica.minx) / (area_grafica.maxx - area_grafica.minx)) * canvas.width;
+        const canvasY = ((area_grafica.maxy - y) / (area_grafica.maxy - area_grafica.miny)) * canvas.height;
+        return { x: canvasX, y: canvasY };
+    }
+    
+    // Dibujar un punto en el canvas
+    function dibujarPunto(x, y, clase) {
+        const color = clase === 1 ? 'blue' : 'green';
+        const pos = logicalToCanvas(x, y);
+        
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, 5, 0, 2 * Math.PI);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = 'black';
+        ctx.stroke();
+    }
+    
+    // Dibujar todos los puntos
+    function dibujarTodosLosPuntos() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        dibujarEjes();
+        
+        puntos.forEach(punto => {
+            dibujarPunto(punto.x, punto.y, punto.clase);
+        });
+        
+        if (perceptron) {
+            dibujarLimiteDecision();
+        }
+    }
+    
+    // Dibujar ejes coordenados
+    function dibujarEjes() {
+        ctx.strokeStyle = '#aaa';
+        ctx.lineWidth = 1;
+        
+        // Eje X
+        const origenY = logicalToCanvas(0, 0).y;
+        ctx.beginPath();
+        ctx.moveTo(0, origenY);
+        ctx.lineTo(canvas.width, origenY);
+        ctx.stroke();
+        
+        // Eje Y
+        const origenX = logicalToCanvas(0, 0).x;
+        ctx.beginPath();
+        ctx.moveTo(origenX, 0);
+        ctx.lineTo(origenX, canvas.height);
+        ctx.stroke();
+        
+        // Etiquetas
+        ctx.fillStyle = 'black';
+        ctx.font = '12px Arial';
+        ctx.fillText('0', origenX + 5, origenY + 15);
+        ctx.fillText('x', canvas.width - 15, origenY + 15);
+        ctx.fillText('y', origenX - 15, 15);
+    }
+    
+    // Dibujar límite de decisión
+    function dibujarLimiteDecision() {
+        if (!perceptron || perceptron.pesos.length !== 3) return;
+        
+        const w0 = perceptron.pesos[0]; // bias
+        const w1 = perceptron.pesos[1];
+        const w2 = perceptron.pesos[2];
+        
+        // La ecuación es w0 + w1*x + w2*y = 0
+        // Despejamos y: y = (-w0 - w1*x) / w2
+        
+        if (w2 === 0) return; // Evitar división por cero
+        
+        // Calcular puntos para la línea
+        const x1 = area_grafica.minx;
+        const y1 = (-w0 - w1 * x1) / w2;
+        
+        const x2 = area_grafica.maxx;
+        const y2 = (-w0 - w1 * x2) / w2;
+        
+        // Convertir a coordenadas del canvas
+        const p1 = logicalToCanvas(x1, y1);
+        const p2 = logicalToCanvas(x2, y2);
+        
+        // Dibujar la línea
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+    }
+    
+    // Graficar errores durante el entrenamiento
+    function graficarErrores(errores) {
+        const errorCanvas = document.getElementById("error_graph");
+        errorCtx.clearRect(0, 0, errorCanvas.width, errorCanvas.height);
+        
+        if (errores.length === 0) return;
+        
+        const maxError = Math.max(...errores);
+        const stepX = errorCanvas.width / (errores.length - 1);
+        const scaleY = errorCanvas.height / (maxError || 1);
+        
+        errorCtx.strokeStyle = 'blue';
+        errorCtx.lineWidth = 2;
+        errorCtx.beginPath();
+        
+        errores.forEach((error, i) => {
+            const x = i * stepX;
+            const y = errorCanvas.height - error * scaleY;
+            
+            if (i === 0) {
+                errorCtx.moveTo(x, y);
+            } else {
+                errorCtx.lineTo(x, y);
+            }
+            
+            // Puntos en cada época
+            errorCtx.fillStyle = 'red';
+            errorCtx.beginPath();
+            errorCtx.arc(x, y, 3, 0, 2 * Math.PI);
+            errorCtx.fill();
+        });
+        
+        errorCtx.stroke();
+        
+        // Ejes y etiquetas
+        errorCtx.strokeStyle = '#aaa';
+        errorCtx.lineWidth = 1;
+        errorCtx.beginPath();
+        errorCtx.moveTo(0, errorCanvas.height);
+        errorCtx.lineTo(errorCanvas.width, errorCanvas.height);
+        errorCtx.moveTo(0, 0);
+        errorCtx.lineTo(0, errorCanvas.height);
+        errorCtx.stroke();
+        
+        errorCtx.fillStyle = 'black';
+        errorCtx.font = '12px Arial';
+        errorCtx.fillText('Época', errorCanvas.width - 30, errorCanvas.height - 5);
+        errorCtx.fillText('Errores', 5, 10);
+    }
+    
+    // Actualizar tabla de puntos
+    function actualizarTabla() {
+        let html = '';
+        puntos.forEach(punto => {
+            html += `<tr>
+                <td>${punto.x.toFixed(2)}</td>
+                <td>${punto.y.toFixed(2)}</td>
+                <td class="${punto.clase === 1 ? 'azul' : 'verde'}">${punto.clase}</td>
+            </tr>`;
+        });
+        document.getElementById("datos_tabla").innerHTML = html;
+    }
+    
+    // Manejador de clic en el canvas
+    canvas.addEventListener('click', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        const logicalPos = canvasToLogical(x, y);
+        const clase = parseInt(document.getElementById("clase").value);
+        
+        puntos.push({
+            x: logicalPos.x,
+            y: logicalPos.y,
+            clase: clase
+        });
+        
+        dibujarTodosLosPuntos();
+        actualizarTabla();
+    });
+    
+    // Manejador para agregar punto manualmente
+    document.getElementById("btn_agregar").addEventListener('click', function() {
+        const x = parseFloat(document.getElementById("x").value);
+        const y = parseFloat(document.getElementById("y").value);
+        const clase = parseInt(document.getElementById("clase").value);
+        
+        if (isNaN(x) || isNaN(y) || isNaN(clase)) {
+            alert("Por favor ingrese valores válidos");
+            return;
+        }
+        
+        puntos.push({ x, y, clase });
+        dibujarTodosLosPuntos();
+        actualizarTabla();
+    });
+    
+    // Manejador para entrenar el perceptrón
+    document.getElementById("btn_entrenar").addEventListener('click', function() {
+        if (puntos.length < 2) {
+            alert("Agregue al menos 2 puntos para entrenar");
+            return;
+        }
+        
+        // Preparar datos de entrenamiento
+        const X = puntos.map(p => [p.x, p.y]);
+        const y = puntos.map(p => p.clase);
+        
+        // Crear y entrenar perceptrón
+        perceptron = new Perceptron(2, 0.1, 100);
+        erroresEntrenamiento = perceptron.entrenar(X, y);
+        
+        // Mostrar resultados
+        document.getElementById("pesos_text").innerHTML = `
+            Bias (w0): ${perceptron.pesos[0].toFixed(4)}<br>
+            Peso X (w1): ${perceptron.pesos[1].toFixed(4)}<br>
+            Peso Y (w2): ${perceptron.pesos[2].toFixed(4)}
+        `;
+        
+        // Graficar errores
+        graficarErrores(erroresEntrenamiento);
+        
+        // Redibujar con límite de decisión
+        dibujarTodosLosPuntos();
+    });
+    
+    // Manejador para predecir
+    document.getElementById("btn_predecir").addEventListener('click', function() {
+        if (!perceptron) {
+            alert("Primero entrene el perceptrón");
+            return;
+        }
+        
+        const x = parseFloat(document.getElementById("test_x").value);
+        const y = parseFloat(document.getElementById("test_y").value);
+        
+        if (isNaN(x) || isNaN(y)) {
+            alert("Ingrese valores válidos para X e Y");
+            return;
+        }
+        
+        const prediccion = perceptron.predecir([x, y]);
+        document.getElementById("prediccion_result").innerHTML = `
+            Para el punto (${x.toFixed(2)}, ${y.toFixed(2)}):<br>
+            <strong>Clase predicha: ${prediccion}</strong>
+        `;
+        
+        // Dibujar el punto de prueba
+        dibujarPunto(x, y, prediccion);
+    });
+    
+    // Manejador para limpiar todo
+    document.getElementById("btn_limpiar").addEventListener('click', function() {
+        puntos = [];
+        perceptron = null;
+        erroresEntrenamiento = [];
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        errorCtx.clearRect(0, 0, errorCanvas.width, errorCanvas.height);
+        
+        document.getElementById("datos_tabla").innerHTML = '';
+        document.getElementById("pesos_text").innerText = 'No entrenado';
+        document.getElementById("prediccion_result").innerText = 'Ingrese valores y haga clic en Predecir';
+        
+        dibujarEjes();
+    });
+    
+    // Inicialización
+    window.onload = function() {
+        dibujarEjes();
+    };
+</script>
+</html>
