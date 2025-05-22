@@ -1,0 +1,4 @@
+RN con ANN para Datos cardiacos: https://youtu.be/ob8Nc6sZOPE 
+
+
+RN con ANN para IRIS: https://youtu.be/w5Ynffb9j0o
